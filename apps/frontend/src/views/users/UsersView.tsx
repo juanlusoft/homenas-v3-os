@@ -52,10 +52,10 @@ function UserRow({ user, currentUserId, onChangePassword, onDelete }: UserRowPro
           <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400">{t.users.you}</span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 hidden sm:table-cell">
         <RoleBadge role={user.role} />
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500 dark:text-white/50">
+      <td className="px-4 py-3 text-sm text-gray-500 dark:text-white/50 hidden sm:table-cell">
         {formatDate(user.createdAt)}
       </td>
       <td className="px-4 py-3">
@@ -245,7 +245,7 @@ export function UsersView() {
   }
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -276,8 +276,8 @@ export function UsersView() {
             <thead>
               <tr className="border-b border-black/10 dark:border-white/10 text-gray-500 dark:text-white/40 text-xs uppercase tracking-wider">
                 <th className="px-4 py-3 text-left font-medium">{t.users.username}</th>
-                <th className="px-4 py-3 text-left font-medium">{t.users.role}</th>
-                <th className="px-4 py-3 text-left font-medium">{t.users.created}</th>
+                <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">{t.users.role}</th>
+                <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">{t.users.created}</th>
                 <th className="px-4 py-3 text-left font-medium">{t.users.actions}</th>
               </tr>
             </thead>

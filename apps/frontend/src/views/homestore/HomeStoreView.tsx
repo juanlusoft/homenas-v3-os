@@ -608,7 +608,7 @@ export function HomeStoreView() {
   }
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       {/* Page header */}
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.homestore.title}</h1>

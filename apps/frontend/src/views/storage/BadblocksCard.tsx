@@ -104,7 +104,7 @@ export function BadblocksCard() {
           )}
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="bg-black/5 dark:bg-white/5 rounded-lg px-3 py-2">
               <p className="text-gray-500 dark:text-white/40 mb-1">{t.storage.verifiedBlocks}</p>
               <p className="text-gray-700 dark:text-white/70 tabular-nums font-mono">{status.blocksChecked.toLocaleString()}</p>

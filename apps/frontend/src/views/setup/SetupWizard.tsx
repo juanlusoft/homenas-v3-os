@@ -29,7 +29,7 @@ function StepIndicators({ labels, current }: { labels: string[]; current: Step }
         return (
           <div key={n} className="flex items-start flex-1">
             {/* Circle + label */}
-            <div className="flex flex-col items-center min-w-0 flex-shrink-0" style={{ width: 52 }}>
+            <div className="flex flex-col items-center min-w-0 w-12 shrink-0">
               <div className={[
                 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors shrink-0',
                 isDone ? 'bg-green-500 text-white' : isNow ? 'bg-indigo-500 text-white' : 'bg-black/10 dark:bg-white/10 text-gray-400 dark:text-white/30',
@@ -272,8 +272,8 @@ function StepNetwork({ onNext }: { onNext: () => void }) {
       {/* Static fields */}
       {mode === 'static' && (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-white/50 mb-1.5">Dirección IP</label>
               <input type="text" value={ip} onChange={e => setIp(e.target.value)} placeholder="192.168.1.10"
                 className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 font-mono" />
@@ -633,7 +633,7 @@ export function SetupWizard() {
         <StepIndicators labels={LABELS} current={step} />
 
         {/* Card */}
-        <div className="bg-black/5 dark:bg-white/5 backdrop-blur border border-black/10 dark:border-white/10 rounded-2xl p-8">
+        <div className="bg-black/5 dark:bg-white/5 backdrop-blur border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-8">
           {step === 1 && <StepWelcome onNext={() => setStep(2)} />}
           {step === 2 && <StepAccount onNext={() => setStep(3)} />}
           {step === 3 && <StepNetwork onNext={() => setStep(4)} />}

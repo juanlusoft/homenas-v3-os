@@ -70,27 +70,27 @@ function DiskRow({
       <td className="px-4 py-3">
         <span className="font-mono text-xs text-indigo-700 dark:text-indigo-300">{disk.device}</span>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-700 dark:text-white/70">
+      <td className="hidden md:table-cell px-4 py-3 text-sm text-gray-700 dark:text-white/70">
         {disk.model ?? <span className="text-gray-400 dark:text-white/30">—</span>}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-700 dark:text-white/70 tabular-nums">
+      <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-700 dark:text-white/70 tabular-nums">
         {formatBytes(disk.sizeBytes)}
       </td>
       <td className="px-4 py-3">
         <UsageBar sizeBytes={disk.sizeBytes} usedBytes={disk.usedBytes} />
       </td>
-      <td className="px-4 py-3">
+      <td className="hidden md:table-cell px-4 py-3">
         {disk.fsType
           ? <span className="text-xs bg-black/10 dark:bg-white/10 text-gray-600 dark:text-white/60 px-2 py-0.5 rounded font-mono">{disk.fsType}</span>
           : <span className="text-gray-400 dark:text-white/30 text-xs">—</span>}
       </td>
-      <td className="px-4 py-3 text-xs text-gray-500 dark:text-white/50 font-mono">
+      <td className="hidden lg:table-cell px-4 py-3 text-xs text-gray-500 dark:text-white/50 font-mono">
         {disk.mountPoint ?? <span className="text-gray-400 dark:text-white/30">—</span>}
       </td>
-      <td className="px-4 py-3">
+      <td className="hidden lg:table-cell px-4 py-3">
         <IoCell value={io?.readMBs ?? 0} color="text-green-600 dark:text-green-400" />
       </td>
-      <td className="px-4 py-3">
+      <td className="hidden lg:table-cell px-4 py-3">
         <IoCell value={io?.writeMBs ?? 0} color="text-yellow-600 dark:text-yellow-400" />
       </td>
       <td className="px-4 py-3">
@@ -122,11 +122,17 @@ function DiskRow({
 function SkeletonRow() {
   return (
     <tr className="border-b border-black/5 dark:border-white/5">
-      {Array.from({ length: 11 }).map((_, i) => (
-        <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse" style={{ width: `${60 + (i * 13) % 40}%` }} />
-        </td>
-      ))}
+      <td className="pl-3 pr-1 py-3 w-8"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-4" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-16" /></td>
+      <td className="hidden md:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-28" /></td>
+      <td className="hidden sm:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-12" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-20" /></td>
+      <td className="hidden md:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-10" /></td>
+      <td className="hidden lg:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-24" /></td>
+      <td className="hidden lg:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-14" /></td>
+      <td className="hidden lg:table-cell px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-14" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-12" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-black/10 dark:bg-white/10 rounded animate-pulse w-6" /></td>
     </tr>
   )
 }
@@ -204,13 +210,13 @@ export function DisksCard() {
                   )}
                 </th>
                 <th className="px-4 py-3 text-left font-medium">{t.storage.device}</th>
-                <th className="px-4 py-3 text-left font-medium">{t.storage.model}</th>
-                <th className="px-4 py-3 text-left font-medium">{t.storage.size}</th>
+                <th className="hidden md:table-cell px-4 py-3 text-left font-medium">{t.storage.model}</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left font-medium">{t.storage.size}</th>
                 <th className="px-4 py-3 text-left font-medium">{t.storage.used}</th>
-                <th className="px-4 py-3 text-left font-medium">FS</th>
-                <th className="px-4 py-3 text-left font-medium">{t.storage.mountPoint}</th>
-                <th className="px-4 py-3 text-left font-medium text-green-600 dark:text-green-500">↑ Read</th>
-                <th className="px-4 py-3 text-left font-medium text-yellow-600 dark:text-yellow-500">↓ Write</th>
+                <th className="hidden md:table-cell px-4 py-3 text-left font-medium">FS</th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left font-medium">{t.storage.mountPoint}</th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left font-medium text-green-600 dark:text-green-500">↑ Read</th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left font-medium text-yellow-600 dark:text-yellow-500">↓ Write</th>
                 <th className="px-4 py-3 text-left font-medium">SMART</th>
                 <th className="px-4 py-3 text-left font-medium">Acciones</th>
               </tr>

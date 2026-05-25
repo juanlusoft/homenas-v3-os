@@ -566,7 +566,7 @@ function DeviceDetailPanel({ deviceId, onClose }: { deviceId: number; onClose: (
               )}
               {runs.length > 0 && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[600px]">
+                  <table className="w-full text-sm min-w-full">
                     <thead>
                       <tr className="border-b border-black/5 dark:border-white/5">
                         <th className="text-left text-xs font-medium text-gray-400 dark:text-white/30 pb-2 pr-4">Started</th>
@@ -803,7 +803,7 @@ export function ActiveBackupView() {
   const pendingCount = devices?.filter(d => d.status === 'pending').length ?? 0
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

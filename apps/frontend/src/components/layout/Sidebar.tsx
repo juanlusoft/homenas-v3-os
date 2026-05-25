@@ -115,7 +115,7 @@ export function Sidebar() {
         'fixed left-0 top-0 h-full z-40 flex flex-col',
         'bg-white/95 dark:bg-gray-900/95 backdrop-blur border-r border-black/5 dark:border-white/5',
         'transition-all duration-200 ease-in-out',
-        collapsed ? 'w-16' : 'w-56'
+        collapsed ? 'w-16 -translate-x-full md:translate-x-0' : 'w-56 translate-x-0'
       )}
     >
       {/* Header */}

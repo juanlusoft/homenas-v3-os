@@ -220,10 +220,10 @@ function ContainerRow({
           <div className="flex items-center gap-2">
             <ContainerIcon name={container.name} />
             <div className="min-w-0">
-              <div className="font-medium text-gray-900 dark:text-white text-sm truncate max-w-[120px]" title={container.name}>
+              <div className="font-medium text-gray-900 dark:text-white text-sm truncate" title={container.name}>
                 {container.name}
               </div>
-              <div className="text-gray-500 dark:text-white/40 text-xs font-mono truncate max-w-[120px]" title={container.image}>
+              <div className="text-gray-500 dark:text-white/40 text-xs font-mono truncate" title={container.image}>
                 {container.image}
               </div>
               <EnvVarsSection envVars={container.envVars ?? []} />
@@ -233,7 +233,7 @@ function ContainerRow({
         <td className="px-4 py-3">
           <StatusBadge status={container.status} />
         </td>
-        <td className="px-4 py-3 text-xs text-gray-500 dark:text-white/50 font-mono max-w-[160px] truncate" title={formatPorts(container.ports)}>
+        <td className="px-4 py-3 text-xs text-gray-500 dark:text-white/50 font-mono truncate hidden sm:table-cell" title={formatPorts(container.ports)}>
           {formatPorts(container.ports)}
         </td>
         <td className="px-4 py-3 text-xs text-gray-600 dark:text-white/60 tabular-nums font-mono">
@@ -441,7 +441,7 @@ export function ContainersCard() {
             <tr className="border-b border-black/10 dark:border-white/10">
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">{t.docker.name}</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">{t.docker.status}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">{t.docker.ports}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider hidden sm:table-cell">{t.docker.ports}</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">CPU</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">{t.docker.memory}</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white/40 uppercase tracking-wider">{t.common.actions}</th>

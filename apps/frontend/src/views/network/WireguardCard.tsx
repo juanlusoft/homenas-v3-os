@@ -111,7 +111,7 @@ function PeerRow({ peer, onRemove, isRemoving }: PeerRowProps) {
           <span className="text-sm text-white/80">{peer.name}</span>
         </td>
         <td className="px-4 py-3">
-          <span className="text-xs font-mono text-gray-500 dark:text-white/50 truncate max-w-[120px] block">
+          <span className="text-xs font-mono text-gray-500 dark:text-white/50 truncate w-20 block">
             {peer.publicKey.slice(0, 16)}…
           </span>
         </td>
@@ -187,7 +187,7 @@ function InitForm({ onCancel }: InitFormProps) {
         {t.network.wireguardNotConfigured}
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-gray-500 dark:text-white/50 mb-1">{t.network.listenPort}</label>
           <input

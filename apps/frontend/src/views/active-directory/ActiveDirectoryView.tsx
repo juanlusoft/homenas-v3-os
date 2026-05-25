@@ -943,7 +943,7 @@ export function ActiveDirectoryView() {
   ]
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.activeDirectory.title}</h1>

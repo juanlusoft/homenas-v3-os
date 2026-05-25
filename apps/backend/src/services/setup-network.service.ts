@@ -52,14 +52,28 @@ async function hasCmd(cmd: string): Promise<boolean> {
 }
 
 // Check if an interface is currently configured via DHCP.
-// We probe NetworkManager first, then dhcpcd lease files, then assume DHCP.
+// We probe NetworkManager first (via connection show), then dhcpcd lease files, then assume DHCP.
 async function isDhcp(iface: string): Promise<boolean> {
-  // NetworkManager
-  const nmResult = await exec('nmcli', ['-t', '-f', 'GENERAL.HWADDR,IP4.METHOD', 'device', 'show', iface])
-  if (nmResult.exitCode === 0) {
-    return nmResult.stdout.includes('ipv4.method:auto') || nmResult.stdout.includes('auto')
+  // NetworkManager: search active connections first, then all connections (interface may be DOWN)
+  for (const extraArgs of [['--active'], []]) {
+    const conResult = await exec('nmcli', ['-t', '-f', 'NAME,DEVICE', 'con', 'show', ...extraArgs])
+    if (conResult.exitCode !== 0) continue
+    for (const line of conResult.stdout.trim().split('\n')) {
+      const colonIdx = line.indexOf(':')
+      if (colonIdx === -1) continue
+      const name = line.slice(0, colonIdx)
+      const device = line.slice(colonIdx + 1)
+      if (device === iface) {
+        const methodResult = await exec('nmcli', ['-t', '-f', 'ipv4.method', 'con', 'show', name])
+        if (methodResult.exitCode === 0) {
+          // terse output: "ipv4.method:auto" or "ipv4.method:manual"
+          const method = methodResult.stdout.trim().split(':').pop() ?? ''
+          return method !== 'manual'
+        }
+      }
+    }
   }
-  // dhcpcd lease file
+  // dhcpcd lease file fallback
   const leaseFiles = [
     `/var/lib/dhcpcd5/dhcpcd-${iface}.lease`,
     `/var/lib/dhcpcd/${iface}.lease`,
@@ -68,7 +82,7 @@ async function isDhcp(iface: string): Promise<boolean> {
   for (const f of leaseFiles) {
     try { readFileSync(f); return true } catch { /* not found */ }
   }
-  return true // fallback: assume DHCP
+  return true // no connection found → assume DHCP (safer default for unconfigured interfaces)
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────

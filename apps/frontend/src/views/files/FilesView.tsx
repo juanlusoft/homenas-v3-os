@@ -314,6 +314,7 @@ export function FilesView() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   // Once locations load, jump to the first one — but ONLY on the very first
   // mount. Re-running on currentPath change would steal navigation away from
@@ -484,9 +485,13 @@ export function FilesView() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-80px)] overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-80px)] overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-gray-50 dark:bg-gray-950">
       {/* ── Sidebar tree ── */}
-      <aside className="w-56 shrink-0 bg-gray-900/60 border-r border-black/5 dark:border-white/5 overflow-y-auto py-3 px-2">
+      <aside className={cn(
+        'shrink-0 bg-gray-900/60 border-r border-black/5 dark:border-white/5 overflow-y-auto py-3 px-2',
+        'w-full md:w-56',
+        mobileSidebarOpen ? 'block' : 'hidden md:block',
+      )}>
         <p className="text-xs text-gray-400 dark:text-white/30 uppercase tracking-wider px-2 mb-2">Locations</p>
         {locations.length === 0 ? (
           <div className="px-2 py-1.5 space-y-1.5">
@@ -525,7 +530,15 @@ export function FilesView() {
       {/* ── Main panel ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-black/5 dark:border-white/5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-black/5 dark:border-white/5 shrink-0">
+          {/* Mobile sidebar toggle */}
+          <button
+            onClick={() => setMobileSidebarOpen((v) => !v)}
+            className="md:hidden p-1.5 rounded-lg text-gray-500 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/80 hover:bg-black/5 dark:bg-white/5 transition-colors"
+            title="Toggle locations"
+          >
+            <HardDrive className="w-4 h-4" />
+          </button>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
             {breadcrumbs.map((crumb, i) => (
@@ -643,8 +656,8 @@ export function FilesView() {
               <thead>
                 <tr className="text-xs text-gray-400 dark:text-white/30 uppercase tracking-wider border-b border-black/5 dark:border-white/5">
                   <th className="text-left pb-2 pl-8">Name</th>
-                  <th className="text-right pb-2 pr-4">Size</th>
-                  <th className="text-left pb-2 pl-4">Modified</th>
+                  <th className="text-right pb-2 pr-4 hidden sm:table-cell">Size</th>
+                  <th className="text-left pb-2 pl-4 hidden sm:table-cell">Modified</th>
                   <th className="text-left pb-2 pl-4 hidden lg:table-cell">Permissions</th>
                 </tr>
               </thead>
@@ -688,10 +701,10 @@ export function FilesView() {
                           </span>
                         </div>
                       </td>
-                      <td className="py-2 pr-4 text-right font-mono text-gray-500 dark:text-white/40 text-xs">
+                      <td className="py-2 pr-4 text-right font-mono text-gray-500 dark:text-white/40 text-xs hidden sm:table-cell">
                         {entry.type === 'dir' ? '—' : formatSize(entry.size)}
                       </td>
-                      <td className="py-2 pl-4 text-gray-500 dark:text-white/40 text-xs whitespace-nowrap">
+                      <td className="py-2 pl-4 text-gray-500 dark:text-white/40 text-xs whitespace-nowrap hidden sm:table-cell">
                         {entry.modified ? formatDate(entry.modified) : '—'}
                       </td>
                       <td className="py-2 pl-4 font-mono text-gray-400 dark:text-white/30 text-xs hidden lg:table-cell">

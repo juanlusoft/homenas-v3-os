@@ -1,5 +1,5 @@
 import { exec } from '../lib/exec.js'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,14 +74,26 @@ async function stApi<T>(
 
 // ─── Key extraction ───────────────────────────────────────────────────────────
 
+// Syncthing moved config location across versions:
+//   < 1.27 : ~/.config/syncthing/config.xml
+//   >= 1.27 : ~/.local/state/syncthing/config.xml  (XDG state dir)
+const SYNCTHING_CONFIG_PATHS = [
+  '/root/.local/state/syncthing/config.xml',
+  '/root/.config/syncthing/config.xml',
+]
+
 export function getApiKey(): string | null {
-  try {
-    const xml = readFileSync('/root/.config/syncthing/config.xml', 'utf8')
-    const match = xml.match(/<apikey>([^<]+)<\/apikey>/i)
-    return match ? match[1].trim() : null
-  } catch {
-    return null
+  for (const path of SYNCTHING_CONFIG_PATHS) {
+    try {
+      if (!existsSync(path)) continue
+      const xml = readFileSync(path, 'utf8')
+      const match = xml.match(/<apikey>([^<]+)<\/apikey>/i)
+      if (match) return match[1].trim()
+    } catch {
+      // try next path
+    }
   }
+  return null
 }
 
 // ─── Service functions ────────────────────────────────────────────────────────
@@ -158,18 +170,13 @@ export async function listDevices(): Promise<SyncthingDevice[]> {
 
 export async function addDevice(deviceId: string, name: string): Promise<void> {
   const apiKey = requireApiKey()
-  // Fetch current list to avoid overwriting
-  const existing = await stApi<SyncthingDevice[]>('GET', '/rest/config/devices', apiKey)
-  const updated: SyncthingDevice[] = [
-    ...existing,
-    {
-      deviceID: deviceId,
-      name,
-      addresses: ['dynamic'],
-      paused: false,
-    },
-  ]
-  await stApi<unknown>('POST', '/rest/config/devices', apiKey, updated)
+  // POST /rest/config/devices expects a single device object (not the full array)
+  await stApi<unknown>('POST', '/rest/config/devices', apiKey, {
+    deviceID: deviceId,
+    name,
+    addresses: ['dynamic'],
+    paused: false,
+  })
 }
 
 export async function removeDevice(deviceId: string): Promise<void> {
@@ -189,19 +196,15 @@ export async function addFolder(
   sharedWithDevices: string[]
 ): Promise<void> {
   const apiKey = requireApiKey()
-  const existing = await stApi<SyncthingFolder[]>('GET', '/rest/config/folders', apiKey)
-  const updated: SyncthingFolder[] = [
-    ...existing,
-    {
-      id,
-      label: id,
-      path,
-      devices: sharedWithDevices.map((deviceID) => ({ deviceID })),
-      type: 'sendreceive',
-      paused: false,
-    },
-  ]
-  await stApi<unknown>('POST', '/rest/config/folders', apiKey, updated)
+  // POST /rest/config/folders expects a single folder object (not the full array)
+  await stApi<unknown>('POST', '/rest/config/folders', apiKey, {
+    id,
+    label: id,
+    path,
+    devices: sharedWithDevices.map((deviceID) => ({ deviceID })),
+    type: 'sendreceive',
+    paused: false,
+  })
 }
 
 export async function removeFolder(id: string): Promise<void> {
