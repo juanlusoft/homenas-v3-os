@@ -173,27 +173,36 @@ async function buildDiskResolver(
 
   // Find the fuse.mergerfs mount whose mount point is a prefix of currentDir
   let poolMount = ''
-  let driveSource = ''
   for (const line of mounts.split('\n')) {
     const parts = line.trim().split(/\s+/)
     if (parts.length < 3) continue
-    const [source, mountPoint, fsType] = parts
+    const [, mountPoint, fsType] = parts
     if (fsType !== 'fuse.mergerfs') continue
     const decoded = (mountPoint ?? '').replace(/\\040/g, ' ')
     const withSlash = decoded.endsWith('/') ? decoded : `${decoded}/`
     const dirWithSlash = currentDir.endsWith('/') ? currentDir : `${currentDir}/`
     if (dirWithSlash.startsWith(withSlash) && withSlash.length > poolMount.length) {
       poolMount = withSlash
-      driveSource = source ?? ''
     }
   }
 
-  if (!poolMount || !driveSource) return null
+  if (!poolMount) return null
 
-  // Parse the drive list from the MergerFS source field (colon-separated paths)
-  const drives = driveSource
+  // MergerFS exposes its branch list via the xattr user.mergerfs.branches on
+  // the virtual control file <poolMount>/.mergerfs. Node.js has no native
+  // getxattr() so we use a one-liner python3 subprocess (always available).
+  const controlFile = `${poolMount.replace(/\/$/, '')}/.mergerfs`
+  const xattrResult = await exec('python3', [
+    '-c',
+    `import os,sys; sys.stdout.write(os.getxattr(${JSON.stringify(controlFile)}, "user.mergerfs.branches").decode())`,
+  ])
+
+  if (xattrResult.exitCode !== 0 || !xattrResult.stdout.trim()) return null
+
+  // Format: "/mnt/disks/cache1=RW:/mnt/disks/disk1=RW:..."
+  const drives = xattrResult.stdout.trim()
     .split(':')
-    .map((p) => p.trim())
+    .map((branch) => branch.split('=')[0].trim())
     .filter((p) => p.startsWith('/'))
 
   if (drives.length === 0) return null
