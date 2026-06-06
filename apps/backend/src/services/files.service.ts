@@ -1,4 +1,4 @@
-import { stat, readdir, readFile, realpath } from 'node:fs/promises'
+import { stat, readdir, readFile, realpath, access, constants as fsConstants } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, normalize, basename, dirname } from 'node:path'
 import { exec } from '../lib/exec.js'
@@ -17,6 +17,7 @@ export interface FileEntry {
   size: number
   modified: number  // unix timestamp
   permissions: string  // e.g. "drwxr-xr-x"
+  disk: string | null  // physical disk label for files; null for dirs or non-MergerFS paths
 }
 
 export interface FileInfo {
@@ -152,6 +153,69 @@ function modeToString(mode: number, isDir: boolean): string {
   return `${prefix}${r(owner)}${r(group)}${r(other)}`
 }
 
+// ─── MergerFS disk resolver ───────────────────────────────────────────────────
+
+// Builds a resolver that, given a file name inside `currentDir`, returns the
+// label of the underlying physical disk (e.g. "disk1") where the file lives.
+// Returns null for every entry when `currentDir` is not under a MergerFS mount.
+//
+// Called once per listDirectory() invocation — the drive list is built once
+// and reused for all entries in that directory.
+async function buildDiskResolver(
+  currentDir: string,
+): Promise<((entryName: string) => Promise<string | null>) | null> {
+  let mounts: string
+  try {
+    mounts = await readFile('/proc/mounts', 'utf-8')
+  } catch {
+    return null
+  }
+
+  // Find the fuse.mergerfs mount whose mount point is a prefix of currentDir
+  let poolMount = ''
+  let driveSource = ''
+  for (const line of mounts.split('\n')) {
+    const parts = line.trim().split(/\s+/)
+    if (parts.length < 3) continue
+    const [source, mountPoint, fsType] = parts
+    if (fsType !== 'fuse.mergerfs') continue
+    const decoded = (mountPoint ?? '').replace(/\\040/g, ' ')
+    const withSlash = decoded.endsWith('/') ? decoded : `${decoded}/`
+    const dirWithSlash = currentDir.endsWith('/') ? currentDir : `${currentDir}/`
+    if (dirWithSlash.startsWith(withSlash) && withSlash.length > poolMount.length) {
+      poolMount = withSlash
+      driveSource = source ?? ''
+    }
+  }
+
+  if (!poolMount || !driveSource) return null
+
+  // Parse the drive list from the MergerFS source field (colon-separated paths)
+  const drives = driveSource
+    .split(':')
+    .map((p) => p.trim())
+    .filter((p) => p.startsWith('/'))
+
+  if (drives.length === 0) return null
+
+  // Return a per-file resolver: check each drive for the file's existence
+  const relBase = currentDir.slice(poolMount.length - 1) // keep leading /
+  return async (entryName: string): Promise<string | null> => {
+    const rel = `${relBase}/${entryName}`.replace(/\/+/g, '/')
+    for (const drive of drives) {
+      const candidate = join(drive, rel)
+      try {
+        await access(candidate, fsConstants.F_OK)
+        // Use last path segment as disk label (e.g. "disk1" from "/mnt/disks/disk1")
+        return drive.split('/').filter(Boolean).pop() ?? drive
+      } catch {
+        // Not on this drive, try next
+      }
+    }
+    return null
+  }
+}
+
 // ─── listDirectory ────────────────────────────────────────────────────────────
 
 export async function listDirectory(inputPath: string): Promise<FileEntry[]> {
@@ -159,6 +223,9 @@ export async function listDirectory(inputPath: string): Promise<FileEntry[]> {
 
   const entries = await readdir(safePath, { withFileTypes: true })
   const results: FileEntry[] = []
+
+  // Build disk resolver once for this directory (null if not under MergerFS)
+  const resolveDisk = await buildDiskResolver(safePath)
 
   for (const entry of entries) {
     const fullPath = join(safePath, entry.name)
@@ -169,12 +236,18 @@ export async function listDirectory(inputPath: string): Promise<FileEntry[]> {
       else if (entry.isFile()) type = 'file'
       else if (entry.isSymbolicLink()) type = 'symlink'
 
+      // Resolve disk only for files/symlinks — dirs span multiple disks
+      const disk = (type !== 'dir' && resolveDisk)
+        ? await resolveDisk(entry.name)
+        : null
+
       results.push({
         name: entry.name,
         type,
         size: s.size,
         modified: Math.floor(s.mtimeMs / 1000),
         permissions: modeToString(s.mode & 0o777, entry.isDirectory()),
+        disk,
       })
     } catch {
       // Skip inaccessible entries
