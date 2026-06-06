@@ -364,6 +364,7 @@ export function FilesView() {
         size: 0,
         modified: 0,
         permissions: '',
+        disk: null,
       }))
     : (entries ?? [])
 
@@ -431,7 +432,7 @@ export function FilesView() {
 
   const handleBulkDelete = () => {
     const items = Array.from(selected).map((name) => ({
-      entry: entries?.find((e) => e.name === name) ?? { name, type: 'file' as const, size: 0, modified: 0, permissions: '' },
+      entry: entries?.find((e) => e.name === name) ?? { name, type: 'file' as const, size: 0, modified: 0, permissions: '', disk: null },
       path: joinPath(currentPath, name),
     }))
     setConfirmDelete(items)
@@ -440,7 +441,7 @@ export function FilesView() {
   const handleBulkMove = () => {
     setMoveDest(currentPath)
     const items = Array.from(selected).map((name) => ({
-      entry: entries?.find((e) => e.name === name) ?? { name, type: 'file' as const, size: 0, modified: 0, permissions: '' },
+      entry: entries?.find((e) => e.name === name) ?? { name, type: 'file' as const, size: 0, modified: 0, permissions: '', disk: null },
       path: joinPath(currentPath, name),
     }))
     setShowMove({ entries: items })
@@ -659,6 +660,7 @@ export function FilesView() {
                   <th className="text-right pb-2 pr-4 hidden sm:table-cell">Size</th>
                   <th className="text-left pb-2 pl-4 hidden sm:table-cell">Modified</th>
                   <th className="text-left pb-2 pl-4 hidden lg:table-cell">Permissions</th>
+                  <th className="text-left pb-2 pl-4 hidden xl:table-cell">Disco</th>
                 </tr>
               </thead>
               <tbody>
@@ -709,6 +711,12 @@ export function FilesView() {
                       </td>
                       <td className="py-2 pl-4 font-mono text-gray-400 dark:text-white/30 text-xs hidden lg:table-cell">
                         {entry.permissions}
+                      </td>
+                      <td className="py-2 pl-4 font-mono text-xs hidden xl:table-cell">
+                        {entry.disk
+                          ? <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded">{entry.disk}</span>
+                          : <span className="text-gray-400 dark:text-white/25">—</span>
+                        }
                       </td>
                     </tr>
                   )

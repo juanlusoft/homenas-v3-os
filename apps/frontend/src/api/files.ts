@@ -6,6 +6,7 @@ export interface FileEntry {
   size: number
   modified: number
   permissions: string
+  disk: string | null
 }
 
 export interface FileLocation {
