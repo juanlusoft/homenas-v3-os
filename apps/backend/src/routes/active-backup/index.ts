@@ -294,7 +294,9 @@ export async function activeBackupRoutes(fastify: FastifyInstance) {
 
   // ── Agent: push-based backup — file dedup check ────────────────────────────
 
-  fastify.post('/agent/backup/file-check', async (request, reply) => {
+  fastify.post('/agent/backup/file-check', {
+    config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const token = getAgentToken(request)
     if (!token) return reply.status(401).send({ error: 'Unauthorized', message: 'Missing X-Agent-Token' })
 
@@ -318,7 +320,9 @@ export async function activeBackupRoutes(fastify: FastifyInstance) {
       limits: { fileSize: 8 * 1024 * 1024, fields: 20 },
     })
 
-    sub.post('/agent/backup/file', async (request, reply) => {
+    sub.post('/agent/backup/file', {
+      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
       const token = getAgentToken(request)
       if (!token) return reply.status(401).send({ error: 'Unauthorized', message: 'Missing X-Agent-Token' })
 

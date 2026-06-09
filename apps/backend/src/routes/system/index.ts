@@ -18,6 +18,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
   // POST /api/system/reboot
   fastify.post('/reboot', {
     preHandler: [requireAuth, requireAdmin],
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     // Reboot after a short delay so the response can be sent first
     fastify.db.prepare(`INSERT INTO audit_log (user_id, username, action, ip) VALUES (?, ?, 'reboot', ?)`)
@@ -89,6 +90,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
   // POST /api/system/ssh/enable
   fastify.post('/ssh/enable', {
     preHandler: [requireAuth, requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const svc = await sshServiceName()
     await execa('sudo', ['systemctl', 'enable', '--now', svc], { reject: false })
@@ -100,6 +102,7 @@ export async function systemRoutes(fastify: FastifyInstance) {
   // POST /api/system/ssh/disable
   fastify.post('/ssh/disable', {
     preHandler: [requireAuth, requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const svc = await sshServiceName()
     await execa('sudo', ['systemctl', 'disable', '--now', svc], { reject: false })
