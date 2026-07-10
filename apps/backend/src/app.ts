@@ -19,8 +19,6 @@ import { backupRoutes } from './routes/backup/index.js'
 import { setupRoutes } from './routes/setup/index.js'
 import { homestoreRoutes } from './routes/homestore/index.js'
 import { containersRoutes } from './routes/containers/index.js'
-import { activeDirectoryRoutes } from './routes/active-directory/index.js'
-import { activeBackupRoutes } from './routes/active-backup/index.js'
 import { syncthingRoutes } from './routes/syncthing/index.js'
 import { cloudBackupRoutes } from './routes/cloud-backup/index.js'
 import { filesRoutes } from './routes/files/index.js'
@@ -153,12 +151,6 @@ export function buildApp(httpsOptions?: HttpsOptions) {
   // 14.b Container edit (PATCH /api/containers/:id) — operates on
   // HomeStore-installed containers but exposed under its own prefix per spec.
   app.register(containersRoutes, { prefix: '/api/containers' })
-
-  // 15. Active Directory (Samba AD DC)
-  app.register(activeDirectoryRoutes, { prefix: '/api/ad' })
-
-  // 16. Active Backup (distributed agent-based backup)
-  app.register(activeBackupRoutes, { prefix: '/api/active-backup' })
 
   // 17. Syncthing (P2P sync)
   app.register(syncthingRoutes, { prefix: '/api/syncthing' })

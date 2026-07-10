@@ -6,4 +6,3 @@ dist/
 *.db-shm
 *.db-wal
 .DS_Store
-apps/agent/build/
