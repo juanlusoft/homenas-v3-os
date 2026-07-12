@@ -58,7 +58,28 @@ function safeBrowsePath(deviceId: number, subPath: string): string {
  * Removes leading slashes, normalizes separators, prevents traversal.
  */
 function sanitizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.\.+\//g, '')
+  // Split into segments and drop empty/'.'/'..' components. Segment-based
+  // filtering cannot be bypassed the way a single `.replace(/\.\.+\//)` can
+  // (e.g. `....//` or `..../`), because there is no residual string to re-form
+  // a traversal sequence after the filter.
+  return p
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((seg) => seg !== '' && seg !== '.' && seg !== '..')
+    .join('/')
+}
+
+/**
+ * Resolve a relative path under a trusted base directory, guaranteeing the
+ * result stays inside it. Throws on any traversal attempt.
+ */
+function confineToBase(base: string, relPath: string): string {
+  const resolvedBase = resolve(base)
+  const full = resolve(join(resolvedBase, sanitizePath(relPath)))
+  if (full !== resolvedBase && !full.startsWith(resolvedBase + '/')) {
+    throw new Error('Path traversal not allowed')
+  }
+  return full
 }
 
 // ─── Token generation ─────────────────────────────────────────────────────────
@@ -542,7 +563,10 @@ export function createActiveBackupService(db: Database) {
 
       // If this is the last chunk, assemble the file
       if (opts.chunkIndex === opts.totalChunks - 1) {
-        const finalPath = join(deviceRoot(device.id), session.version, 'files', opts.path)
+        // Confine the assembled path to the device's version/files root. The raw
+        // `opts.path` is attacker-controlled (multipart field), so it must be
+        // sanitized + confined here exactly like the tmp dir above.
+        const finalPath = confineToBase(join(deviceRoot(device.id), session.version, 'files'), opts.path)
         mkdirSync(dirname(finalPath), { recursive: true })
 
         const writer = createWriteStream(finalPath)
@@ -705,8 +729,10 @@ export function createActiveBackupService(db: Database) {
       }
       const root = deviceRoot(deviceId)
       const base = join(root, version, 'files')
-      const full = resolve(join(base, filePath))
-      if (!full.startsWith(resolve(base))) throw new Error('Path traversal not allowed')
+      // Use the shared confinement helper: `startsWith(resolve(base))` without a
+      // trailing separator would allow a sibling dir whose name shares the prefix
+      // (e.g. `.../files-evil`). confineToBase enforces the `/` boundary.
+      const full = confineToBase(base, filePath)
       if (!existsSync(full)) throw new Error('File not found')
       return full
     },

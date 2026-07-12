@@ -33,6 +33,7 @@ fi
 warn "This will:"
 warn "  - Stop and remove the ${SERVICE_NAME} systemd service"
 warn "  - Delete ${INSTALL_DIR} (includes database and certificates)"
+warn "  - Remove /etc/sudoers.d/homenas and the 'homenas' system user"
 echo ""
 if (( ASSUME_YES )); then
   info "--yes set, proceeding without prompt."
@@ -81,8 +82,29 @@ if [[ -d "$INSTALL_DIR" ]]; then
   rm -rf "$INSTALL_DIR"
 fi
 
+# ── Remove privilege grant and service user ───────────────────────────────────
+# The installer grants `homenas ALL=(root) NOPASSWD: ALL`. Leaving it behind
+# after uninstall is a latent root-escalation vector, so remove it explicitly.
+if [[ -f /etc/sudoers.d/homenas ]]; then
+  info "Removing /etc/sudoers.d/homenas (NOPASSWD grant)..."
+  rm -f /etc/sudoers.d/homenas
+fi
+if id homenas &>/dev/null; then
+  info "Removing 'homenas' system user..."
+  userdel homenas 2>/dev/null || warn "Could not remove 'homenas' user (in use?)"
+fi
+
+# ── Remove Avahi advertisement created by the installer ───────────────────────
+if [[ -f /etc/avahi/services/smb.service ]]; then
+  info "Removing /etc/avahi/services/smb.service..."
+  rm -f /etc/avahi/services/smb.service
+  systemctl reload avahi-daemon 2>/dev/null || true
+fi
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 info ""
 info "✓ HomeNas OS v3 desinstalado correctamente."
 info "  Node.js, pnpm y git no han sido eliminados."
+warn "  Samba (smb.conf), wsdd2 y los paquetes apt siguen instalados/activos."
+warn "  Si no los usas para otra cosa: apt-get remove samba wsdd2  (revisa antes)."
 info ""

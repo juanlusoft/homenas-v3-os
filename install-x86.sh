@@ -333,16 +333,50 @@ if [[ -f "${INSTALL_DIR}/package.json" ]]; then
 fi
 info "HomeNas OS v${APP_VERSION}"
 
-# ── Install pnpm dependencies and build ───────────────────────────────────────
+# ── Dedicated service user (must exist BEFORE pnpm install) ───────────────────
+# Create the homenas user up front so that `pnpm install`/`build` — and any
+# npm postinstall scripts in transitive deps — run UNPRIVILEGED. Previously this
+# ran as root (the user was created later), so a compromised transitive dep's
+# install script executed with full root access. Mirrors install.sh.
+
+section "System user"
+
+if ! id homenas &>/dev/null; then
+  useradd -r -s /usr/sbin/nologin -d "${INSTALL_DIR}" -c "HomeNas OS service" homenas
+  info "User 'homenas' created"
+else
+  info "User 'homenas' already exists"
+fi
+chown -R homenas:homenas "${INSTALL_DIR}"
+git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
+sudo -u homenas git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
+
+# ── Install pnpm dependencies and build (as homenas, NOT root) ─────────────────
 
 section "Build"
 
 cd "${INSTALL_DIR}"
 info "Installing pnpm dependencies..."
-pnpm install --frozen-lockfile
+# --ignore-scripts: install scripts of transitive deps must not run as part of
+# resolution; native addons are compiled explicitly below.
+sudo -u homenas pnpm install --frozen-lockfile --ignore-scripts
+
+# Compile native addons that require a build step (better-sqlite3).
+info "Building native addons (better-sqlite3)..."
+SQLITE3_PKG=$(find "${INSTALL_DIR}/node_modules/.pnpm" -maxdepth 2 -name "better-sqlite3" -type d 2>/dev/null | grep "node_modules/better-sqlite3$" | head -1)
+if [[ -n "${SQLITE3_PKG}" ]]; then
+  if ! ls "${SQLITE3_PKG}"/build/Release/better_sqlite3.node &>/dev/null; then
+    (cd "${SQLITE3_PKG}" && sudo -u homenas npm install --ignore-scripts=false 2>&1 | tail -3) \
+      || warn "better-sqlite3 native build failed — app may not start"
+  else
+    info "better-sqlite3 already compiled"
+  fi
+else
+  warn "better-sqlite3 package not found in virtual store"
+fi
 
 info "Building frontend and backend (NODE_ENV=production)..."
-NODE_ENV=production pnpm -r build
+sudo -u homenas NODE_ENV=production pnpm -r build
 
 # ── TLS certificate ───────────────────────────────────────────────────────────
 
@@ -367,16 +401,9 @@ else
 fi
 chmod 600 "${KEY_PATH}" "${CERT_PATH}"
 
-# ── System user ───────────────────────────────────────────────────────────────
+# ── Privileges (user already created before the build above) ──────────────────
 
-section "System user"
-
-if ! id homenas &>/dev/null; then
-  useradd -r -s /usr/sbin/nologin -d "${INSTALL_DIR}" -c "HomeNas OS service" homenas
-  info "User 'homenas' created"
-else
-  info "User 'homenas' already exists"
-fi
+section "Privileges"
 
 usermod -aG docker homenas 2>/dev/null \
   || warn "docker group not found — skipping (Docker not installed?)"
@@ -535,7 +562,9 @@ if systemctl is-active --quiet "${SERVICE_NAME}"; then
   info ""
   info "  Dashboard : https://${LOCAL_IP}:${PORT}"
   info "  User      : admin"
-  info "  Password  : homenas1  (the setup wizard will ask you to change it)"
+  info "  The setup wizard will guide you when you open the panel."
+  info "  If it asks for the initial password:"
+  info "    sudo cat ${INSTALL_DIR}/data/initial-admin-password.txt"
   info ""
   info "  Logs  : journalctl -u ${SERVICE_NAME} -f"
   info "  Stop  : systemctl stop ${SERVICE_NAME}"

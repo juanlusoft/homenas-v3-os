@@ -42,7 +42,17 @@ const ALLOWED_COMMANDS = (() => {
   return new Set(override.split(',').map((c) => c.trim()).filter(Boolean))
 })()
 
-function assertCommandAllowed(command: string): void {
+// Per-command argument flags that turn an otherwise read-only/allowlisted
+// binary into an arbitrary-command-execution primitive. Allowlisting the binary
+// is NOT enough: `find -exec`, `rsync --rsh`, `snapraid -F` (pre/post hooks via
+// config) etc. run attacker-controlled commands as root (sudo NOPASSWD).
+const ARG_BLOCKED_PREFIXES: Record<string, string[]> = {
+  find: ['-exec', '-execdir', '-ok', '-okdir', '-fprintf', '-fprint', '-fprint0', '-delete'],
+  rsync: ['-e', '--rsh', '--rsync-path', '--remote-option', '--copy-dest', '--compare-dest'],
+  rclone: ['--rc', '--rc-'],
+}
+
+function assertCommandAllowed(command: string, args: readonly string[] = []): void {
   if (typeof command !== 'string' || !command) {
     throw new Error('Scheduler command is required')
   }
@@ -55,6 +65,17 @@ function assertCommandAllowed(command: string): void {
       `Scheduler command "${name}" is not in the allowlist. ` +
       `Allowed: ${[...ALLOWED_COMMANDS].sort().join(', ')}`,
     )
+  }
+  const blocked = ARG_BLOCKED_PREFIXES[name] ?? []
+  for (const arg of args) {
+    if (typeof arg !== 'string' || arg.includes('\0')) {
+      throw new Error('Invalid scheduler argument')
+    }
+    for (const prefix of blocked) {
+      if (arg === prefix || arg.startsWith(`${prefix}=`) || arg.startsWith(`${prefix} `)) {
+        throw new Error(`Scheduler argument not allowed for ${name}: ${prefix}`)
+      }
+    }
   }
 }
 
@@ -154,7 +175,7 @@ export function createSchedulerService(db: Database) {
       for (const task of tasks) {
         if (!task.enabled) continue
         try {
-          assertCommandAllowed(task.command)
+          assertCommandAllowed(task.command, task.args)
         } catch (err) {
           console.warn(`[scheduler] skipping disallowed task ${task.id} (${task.name}):`, (err as Error).message)
           continue
@@ -168,7 +189,7 @@ export function createSchedulerService(db: Database) {
     },
 
     createTask(input: CreateTaskInput): ScheduledTask {
-      assertCommandAllowed(input.command)
+      assertCommandAllowed(input.command, input.args)
       const record = repo.create({
         name: input.name,
         description: input.description,
@@ -192,7 +213,7 @@ export function createSchedulerService(db: Database) {
       // Allowlist check on the new command (or the existing one if the update
       // doesn't change it — both must remain in the allowlist).
       const effectiveCommand = input.command ?? existing.command
-      assertCommandAllowed(effectiveCommand)
+      assertCommandAllowed(effectiveCommand, input.args ?? existing.args)
 
       const updated = repo.update(id, {
         name: input.name,
@@ -241,7 +262,7 @@ export function createSchedulerService(db: Database) {
     async runNow(id: number): Promise<ScheduledTask> {
       const task = repo.findById(id)
       if (!task) throw new Error('Task not found')
-      assertCommandAllowed(task.command)
+      assertCommandAllowed(task.command, task.args)
 
       const startTime = Math.floor(Date.now() / 1000)
       try {
