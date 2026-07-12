@@ -91,18 +91,22 @@ export function createBackupService(db: Database) {
       let command: string
       let args: string[]
 
+      // The `--` terminator ends option parsing, so a source/destination that
+      // begins with `-`/`--` (e.g. `--rsh=sh -c id`, `--checkpoint-action=...`)
+      // is treated as a path operand, not a flag. validateExtraArgs only covers
+      // extraArgs; this protects the positional source/destination too.
       switch (job.type) {
         case 'rsync':
           command = 'rsync'
-          args = ['-av', '--progress', ...job.extraArgs, job.source, job.destination]
+          args = ['-av', '--progress', ...job.extraArgs, '--', job.source, job.destination]
           break
         case 'tar':
           command = 'tar'
-          args = ['-czf', job.destination, ...job.extraArgs, job.source]
+          args = ['-czf', job.destination, ...job.extraArgs, '--', job.source]
           break
         case 'rclone':
           command = 'rclone'
-          args = ['sync', ...job.extraArgs, job.source, job.destination]
+          args = ['sync', ...job.extraArgs, '--', job.source, job.destination]
           break
         default:
           throw new Error(`Unknown job type: ${job.type as string}`)

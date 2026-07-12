@@ -22,6 +22,19 @@ import type {
 } from '@homenas/shared'
 import type { Database } from 'better-sqlite3'
 
+/**
+ * Reject values that could inject extra lines/directives into line-oriented
+ * config files (smb.conf, /etc/exports). A newline/CR/NUL in a user field lets
+ * that field become an additional directive — e.g. a Samba `root preexec = ...`
+ * (command exec as root) or an extra `/  *(rw,no_root_squash)` export of the
+ * filesystem root. Call on every user-supplied field before writing it out.
+ */
+function assertConfigSafe(value: string, field: string): void {
+  if (/[\r\n\x00]/.test(value)) {
+    throw new Error(`Invalid ${field}: control characters are not allowed`)
+  }
+}
+
 // ─── ip addr JSON types ────────────────────────────────────────────────────────
 
 interface IpAddrInfo {
@@ -626,6 +639,11 @@ export async function createSambaShare(share: CreateSambaShareInput): Promise<Sa
   // Validate path
   validateSharePath(path)
 
+  // Reject control chars that would inject extra smb.conf directives
+  assertConfigSafe(path, 'path')
+  assertConfigSafe(comment, 'comment')
+  assertConfigSafe(validUsers, 'valid users')
+
   // Check if share already exists
   const existing = await listSambaShares()
   if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
@@ -689,6 +707,7 @@ export async function updateSambaShare(
 
     const setLine = (key: string, value: string | undefined) => {
       if (value === undefined) return
+      assertConfigSafe(value, key)
       const idx = lines.findIndex((l) =>
         l.trim().toLowerCase().startsWith(key.toLowerCase() + ' =') ||
         l.trim().toLowerCase().startsWith(key.toLowerCase() + '=')
@@ -848,6 +867,11 @@ function parseNfsExports(content: string): NfsExport[] {
 
 /** Build a canonical /etc/exports line with fsid automatically injected for FUSE mounts */
 function buildExportLine(path: string, clients: string, options: string): string {
+  // Reject control chars that would inject additional /etc/exports lines
+  // (e.g. a second entry exporting `/` with no_root_squash).
+  assertConfigSafe(path, 'path')
+  assertConfigSafe(clients, 'clients')
+  assertConfigSafe(options, 'options')
   // Ensure fsid is present (required for MergerFS / FUSE filesystems)
   const fsid = pathToFsid(path)
   const optParts = options.split(',').map((o) => o.trim()).filter(Boolean)
