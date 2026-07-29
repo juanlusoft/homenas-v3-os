@@ -483,6 +483,12 @@ export async function getMergerFSStatus(): Promise<MergerFSStatus> {
   return { mounted: true, mountPoint: detectedMount, drives, totalBytes, usedBytes }
 }
 
+// Ningún disco de datos debe superar este nivel de llenado durante el drenado.
+// Los discos son SMR: llenarlos al tope degrada gravemente su escritura y no
+// deja margen anti-fragmentación. Se calcula sobre df "size" (que incluye la
+// reserva del 5% de ext4), así que parar en el 90% mantiene ese colchón intacto.
+const DRAIN_FILL_LIMIT = 0.90
+
 export async function drainMergerFSCache(): Promise<void> {
   const status = await getMergerFSStatus()
   if (!status.mounted) throw new Error('MergerFS no está montado')
@@ -490,34 +496,64 @@ export async function drainMergerFSCache(): Promise<void> {
   const cacheDisk = status.drives.find(d => d.role === 'cache')
   if (!cacheDisk) throw new Error('No se detectó ningún disco de caché')
 
-  // Sort data disks by free space descending (most-free first) so files are
-  // spread across all disks instead of piling onto a single one.
   const dataDisks = status.drives
     .filter(d => d.role === 'data')
     .filter(d => d.totalBytes !== null && d.usedBytes !== null)
-    .sort((a, b) => (b.totalBytes! - b.usedBytes!) - (a.totalBytes! - a.usedBytes!))
 
   if (dataDisks.length === 0) throw new Error('No se detectaron discos de datos')
 
+  // Presupuesto de bytes que cada disco puede aún aceptar sin superar el límite.
+  const budget = new Map<string, number>()
+  for (const d of dataDisks) {
+    const limit = Math.floor(d.totalBytes! * DRAIN_FILL_LIMIT)
+    budget.set(d.path, Math.max(0, limit - d.usedBytes!))
+  }
+
+  const cachePrefix = cacheDisk.path.endsWith('/') ? cacheDisk.path : `${cacheDisk.path}/`
+
+  // Listar los archivos de la caché con su tamaño: "<bytes>\t<ruta>".
+  const listResult = await exec('find', [
+    cacheDisk.path, '-mindepth', '1', '-type', 'f', '-printf', '%s\\t%p\\n',
+  ])
+  const files = listResult.stdout.split('\n')
+    .filter(l => l.includes('\t'))
+    .map(l => {
+      const tab = l.indexOf('\t')
+      return { size: parseInt(l.slice(0, tab), 10), path: l.slice(tab + 1) }
+    })
+    .filter(f => Number.isFinite(f.size) && f.path.startsWith(cachePrefix))
+    // Archivos grandes primero: mejor equilibrio (bin-packing descendente).
+    .sort((a, b) => b.size - a.size)
+
   let lastError: string | null = null
 
-  for (const dataDisk of dataDisks) {
-    // Check for FILES only — rsync --remove-source-files leaves empty dirs behind,
-    // so checking for any directory entry would always be non-empty.
-    const checkResult = await exec('find', [
-      cacheDisk.path, '-mindepth', '1', '-type', 'f',
-    ])
-    if (!checkResult.stdout.trim()) break
+  // Reparto ARCHIVO POR ARCHIVO: cada uno al disco con más presupuesto que aún
+  // pueda alojarlo sin pasar del límite. Equilibra y evita llenar un disco.
+  for (const file of files) {
+    let target: string | null = null
+    let bestBudget = -1
+    for (const d of dataDisks) {
+      const b = budget.get(d.path) ?? 0
+      if (b >= file.size && b > bestBudget) {
+        bestBudget = b
+        target = d.path
+      }
+    }
+    if (!target) {
+      lastError = `Sin disco por debajo del ${Math.round(DRAIN_FILL_LIMIT * 100)}% para "${file.path.slice(cachePrefix.length)}"`
+      continue
+    }
 
-    // --ignore-errors: skip files that don't fit (disk full) and continue.
-    // --remove-source-files only removes files that transferred successfully,
-    // so partially-fitting files stay in cache for the next disk.
+    // rsync -R con "./" preserva la jerarquía relativa (downloads/complete/…).
+    const rel = file.path.slice(cachePrefix.length)
     const result = await exec('rsync', [
-      '--remove-source-files', '--archive', '--ignore-errors',
-      `${cacheDisk.path}/`, `${dataDisk.path}/`,
+      '--remove-source-files', '--archive', '--relative',
+      `${cachePrefix}./${rel}`, `${target}/`,
     ])
     if (result.exitCode !== 0) {
       lastError = result.stderr || result.stdout
+    } else {
+      budget.set(target, (budget.get(target) ?? 0) - file.size)
     }
   }
 
@@ -528,14 +564,15 @@ export async function drainMergerFSCache(): Promise<void> {
     '-type', 'd', '-empty', '!', '-name', 'lost+found', '-delete',
   ])
 
-  // Verify no FILES remain (empty dirs were cleaned above)
+  // Si quedan archivos es porque todos los discos alcanzaron el límite del 90%.
+  // No es un fallo de datos, pero se informa: hace falta más capacidad.
   const remaining = await exec('find', [
     cacheDisk.path, '-mindepth', '1', '-type', 'f',
   ])
   if (remaining.stdout.trim()) {
     throw new Error(
-      'No se pudieron mover todos los archivos: puede que todos los discos de datos estén llenos.' +
-      (lastError ? ` Último error rsync: ${lastError}` : '')
+      `No se movieron todos los archivos: los discos de datos alcanzaron el límite de llenado del ${Math.round(DRAIN_FILL_LIMIT * 100)}%.` +
+      (lastError ? ` Detalle: ${lastError}` : '')
     )
   }
 }
