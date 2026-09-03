@@ -89,7 +89,7 @@ export async function dockerRoutes(fastify: FastifyInstance) {
       return reply.send(started)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      const status = message.includes('disallowed') || message.includes('blocked') || message.includes('privileged') || message.includes('capability') ? 403 : 409
+      const status = message.includes('disallowed') || message.includes('blocked') || message.includes('privileged') || message.includes('capability') || message.includes('not allowed') ? 403 : 409
       return reply.status(status).send({ error: 'Conflict', message })
     }
   })

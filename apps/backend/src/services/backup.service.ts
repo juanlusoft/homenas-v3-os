@@ -27,6 +27,33 @@ function validateExtraArgs(type: CreateBackupJobInput['type'], args: string[]): 
   }
 }
 
+// ─── Network-drive backups ────────────────────────────────────────────────────
+
+// rclone network drives are FUSE-mounted under this base; their remote config
+// lives at this path (kept in sync with network-drives.service.ts).
+const NETWORK_MOUNT_BASE = '/mnt/network/'
+const RCLONE_CONF_PATH = '/opt/homenas-v3/data/rclone/network-drives.conf'
+
+// If `p` is inside a mounted rclone network drive, return the native rclone
+// remote for it ("<drive>:<subpath>"), so rclone speaks the protocol (SMB, …)
+// directly instead of reading through the FUSE mount — where rsync and
+// `rclone sync <mountpath>` block indefinitely on I/O. Returns null otherwise.
+function toRcloneRemote(p: string): string | null {
+  if (!p.startsWith(NETWORK_MOUNT_BASE)) return null
+  const rest = p.slice(NETWORK_MOUNT_BASE.length)
+  const slash = rest.indexOf('/')
+  if (slash === -1) return rest ? `${rest}:` : null
+  return `${rest.slice(0, slash)}:${rest.slice(slash + 1)}`
+}
+
+// Append the source's base name to the destination so the copy lands in its own
+// subfolder — matching rsync's "the source dir becomes a child of dest".
+function appendBaseName(dest: string, destIsRemote: boolean, baseName: string): string {
+  if (!baseName) return dest
+  if (destIsRemote) return dest.endsWith(':') ? `${dest}${baseName}` : `${dest}/${baseName}`
+  return `${dest.replace(/\/+$/, '')}/${baseName}`
+}
+
 interface RunningJob {
   jobId: number
   runId: number
@@ -91,25 +118,41 @@ export function createBackupService(db: Database) {
       let command: string
       let args: string[]
 
-      // The `--` terminator ends option parsing, so a source/destination that
-      // begins with `-`/`--` (e.g. `--rsh=sh -c id`, `--checkpoint-action=...`)
-      // is treated as a path operand, not a flag. validateExtraArgs only covers
-      // extraArgs; this protects the positional source/destination too.
-      switch (job.type) {
-        case 'rsync':
-          command = 'rsync'
-          args = ['-av', '--progress', ...job.extraArgs, '--', job.source, job.destination]
-          break
-        case 'tar':
-          command = 'tar'
-          args = ['-czf', job.destination, ...job.extraArgs, '--', job.source]
-          break
-        case 'rclone':
-          command = 'rclone'
-          args = ['sync', ...job.extraArgs, '--', job.source, job.destination]
-          break
-        default:
-          throw new Error(`Unknown job type: ${job.type as string}`)
+      // A source or destination on a network drive can't be handled by rsync or
+      // `rclone sync <mountpath>`: both read through the FUSE mount and hang
+      // indefinitely on I/O. Detect it and use `rclone copy` with the native
+      // remote ("<drive>:<path>") instead. The job's extraArgs are specific to
+      // the original tool (rsync/tar) and are not reused on the rclone line.
+      const srcRemote = toRcloneRemote(job.source)
+      const dstRemote = toRcloneRemote(job.destination)
+
+      if (srcRemote !== null || dstRemote !== null) {
+        command = 'rclone'
+        const src = srcRemote ?? job.source
+        const baseName = job.source.replace(/\/+$/, '').split('/').pop() ?? ''
+        const dst = appendBaseName(dstRemote ?? job.destination, dstRemote !== null, baseName)
+        args = ['copy', '--config', RCLONE_CONF_PATH, '--stats=5s', '--stats-one-line', '--', src, dst]
+      } else {
+        // The `--` terminator ends option parsing, so a source/destination that
+        // begins with `-`/`--` (e.g. `--rsh=sh -c id`, `--checkpoint-action=...`)
+        // is treated as a path operand, not a flag. validateExtraArgs only covers
+        // extraArgs; this protects the positional source/destination too.
+        switch (job.type) {
+          case 'rsync':
+            command = 'rsync'
+            args = ['-av', '--progress', ...job.extraArgs, '--', job.source, job.destination]
+            break
+          case 'tar':
+            command = 'tar'
+            args = ['-czf', job.destination, ...job.extraArgs, '--', job.source]
+            break
+          case 'rclone':
+            command = 'rclone'
+            args = ['sync', ...job.extraArgs, '--', job.source, job.destination]
+            break
+          default:
+            throw new Error(`Unknown job type: ${job.type as string}`)
+        }
       }
 
       // Update job status to running

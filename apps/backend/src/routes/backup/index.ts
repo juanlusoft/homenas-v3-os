@@ -82,6 +82,7 @@ export async function backupRoutes(fastify: FastifyInstance) {
   // POST /api/backup/jobs/:id/run — start a backup job [admin only]
   fastify.post('/jobs/:id/run', {
     preHandler: [requireAuth, requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const jobId = parseInt(id, 10)

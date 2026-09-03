@@ -35,6 +35,9 @@ import {
 } from '../../services/network.service.js'
 import { cloudflareRoutes } from './cloudflare.js'
 
+// Standard WireGuard public key: 32 bytes base64-encoded → 43 chars + '='
+const WG_PUBKEY_RE = /^[A-Za-z0-9+/]{43}=$/
+
 export async function networkRoutes(fastify: FastifyInstance) {
   const { requireAuth, requireAdmin } = fastify
 
@@ -85,6 +88,7 @@ export async function networkRoutes(fastify: FastifyInstance) {
   // POST /api/network/wireguard/install
   fastify.post('/wireguard/install', {
     preHandler: [requireAuth, requireAdmin],
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
   }, async (_request, reply) => {
     try {
       const result = await installWireguard()
@@ -174,8 +178,10 @@ export async function networkRoutes(fastify: FastifyInstance) {
     preHandler: [requireAuth, requireAdmin],
   }, async (request, reply) => {
     const { publicKey } = request.params as { publicKey: string }
-    if (!publicKey) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'publicKey is required' })
+    // Full-key match required: removeWireguardPeer filters wg0.conf sections
+    // with includes(publicKey), so a partial key could wipe every peer.
+    if (!publicKey || !WG_PUBKEY_RE.test(publicKey)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid WireGuard public key' })
     }
 
     try {
@@ -192,8 +198,8 @@ export async function networkRoutes(fastify: FastifyInstance) {
     preHandler: [requireAuth, requireAdmin],
   }, async (request, reply) => {
     const { publicKey } = request.params as { publicKey: string }
-    if (!publicKey) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'publicKey is required' })
+    if (!publicKey || !WG_PUBKEY_RE.test(publicKey)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid WireGuard public key' })
     }
 
     try {

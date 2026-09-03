@@ -23,6 +23,16 @@ import {
   createPool,
 } from '../../services/disk-manage.service.js'
 
+// Device names come from URL params and are interpolated into /dev/<name>,
+// which is then handed to partitioning/mount tools running as root. Restrict
+// to plain kernel block-device names (sda, sdb1, nvme0n1p2, mmcblk0...) so
+// path tricks like "../mnt/storage/x" can never reach those tools.
+const DEVICE_NAME_RE = /^[a-z][a-z0-9]*$/
+
+function isValidDeviceName(name: string): boolean {
+  return DEVICE_NAME_RE.test(name)
+}
+
 export async function storageRoutes(fastify: FastifyInstance) {
   const { requireAuth, requireAdmin } = fastify
 
@@ -151,6 +161,9 @@ export async function storageRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { device: string } }>('/disks/:device/partitions', {
     preHandler: [requireAuth],
   }, async (request, reply) => {
+    if (!isValidDeviceName(request.params.device)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid device name' })
+    }
     const device = `/dev/${request.params.device}`
     try {
       const partitions = await getDiskPartitions(device)
@@ -165,6 +178,9 @@ export async function storageRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { device: string } }>('/disks/:device/mount', {
     preHandler: [requireAuth],
   }, async (request, reply) => {
+    if (!isValidDeviceName(request.params.device)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid device name' })
+    }
     const device = `/dev/${request.params.device}`
     const result = MountDiskInputSchema.safeParse(request.body)
     if (!result.success) {
@@ -200,6 +216,9 @@ export async function storageRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { device: string } }>('/disks/:device/add-to-pool', {
     preHandler: [requireAuth, requireAdmin],
   }, async (request, reply) => {
+    if (!isValidDeviceName(request.params.device)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid device name' })
+    }
     const device = `/dev/${request.params.device}`
     try {
       const addResult = await addDiskToPool(device)
