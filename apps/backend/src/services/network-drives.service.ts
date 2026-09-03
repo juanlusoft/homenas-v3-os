@@ -60,6 +60,32 @@ function assertSafeIniValue(key: string, value: string): void {
   }
 }
 
+// rclone stores certain secrets "obscured" (reversibly scrambled), NOT in
+// plaintext. A plaintext password in the config makes rclone fail to connect
+// with "input too short when revealing password - is it obscured?", so the
+// drive mounts but shows no content. These keys must be passed through
+// `rclone obscure` before being written to the config.
+const OBSCURED_KEYS = new Set(['pass'])
+
+async function obscureSecret(plain: string): Promise<string> {
+  // Feed via stdin so the plaintext never appears in the process list.
+  const r = await execWithInput('rclone', ['obscure', '-'], plain)
+  const out = r.stdout.trim()
+  if (r.exitCode !== 0 || !out) {
+    throw new Error('No se pudo cifrar la contraseña (rclone obscure falló)')
+  }
+  return out
+}
+
+// Returns a copy of `config` with password-like fields obscured for rclone.
+async function obscureConfigSecrets(config: Record<string, string>): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(config)) {
+    out[k] = OBSCURED_KEYS.has(k) && v && v.trim() ? await obscureSecret(v) : v
+  }
+  return out
+}
+
 function buildRemoteSection(name: string, type: DriveType, config: Record<string, string>): string {
   const lines = [`[${name}]`, `type = ${rcloneType(type)}`]
   for (const [k, v] of Object.entries(config)) {
@@ -84,9 +110,10 @@ function removeSection(conf: string, name: string): string {
 }
 
 async function upsertInConf(name: string, type: DriveType, config: Record<string, string>): Promise<void> {
+  const secured = await obscureConfigSecrets(config)
   const existing = await readConf()
   const cleaned = removeSection(existing, name)
-  const updated = (cleaned.trimEnd() + '\n\n' + buildRemoteSection(name, type, config)).trimStart()
+  const updated = (cleaned.trimEnd() + '\n\n' + buildRemoteSection(name, type, secured)).trimStart()
   await writeConf(updated)
 }
 
